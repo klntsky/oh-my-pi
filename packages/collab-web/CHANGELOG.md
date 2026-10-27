@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Collab web now collapses message metadata and custom notices by default while preserving prose, code examples, and attachments.
+
 ## [18.8.0] - 2026-10-07
 
 ### Changed

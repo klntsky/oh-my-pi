@@ -150,6 +150,82 @@ describe("Transcript message Markdown", () => {
 	});
 });
 
+describe("Transcript metadata disclosures", () => {
+	it("keeps host prose, guest attribution and attachments visible while metadata bodies stay unmounted", () => {
+		const entries: SessionEntry[] = [
+			{
+				type: "message",
+				id: "host-metadata",
+				parentId: null,
+				timestamp: "2026-07-15T00:00:00Z",
+				message: {
+					role: "user",
+					content: [
+						{ type: "text", text: "before <irc>private-irc-payload</irc> after" },
+						{ type: "image", mimeType: "image/png", data: "aW1hZ2U=" },
+						{ type: "text", text: "attachment-tail" },
+					],
+					timestamp: 1,
+				},
+			},
+			{
+				type: "custom_message",
+				id: "guest-metadata",
+				parentId: "host-metadata",
+				timestamp: "2026-07-15T00:00:01Z",
+				customType: "collab-prompt",
+				content: "guest prose <system-notice>private-notice-payload</system-notice> guest tail",
+				details: { from: "alice" },
+				display: true,
+			},
+		];
+		const html = renderTranscript({ entries, working: false });
+
+		expect(countElements(html, 'button[aria-expanded="false"]')).toBe(2);
+		expect(html).not.toContain("private-irc-payload");
+		expect(html).not.toContain("private-notice-payload");
+		expect(html).toContain("alice");
+		expect(html).toContain("guest prose");
+		expect(html).toContain("guest tail");
+		expect(html.indexOf("before")).toBeLessThan(html.indexOf("aria-expanded"));
+		expect(html.indexOf("aria-expanded")).toBeLessThan(html.indexOf("after"));
+		expect(html.indexOf("after")).toBeLessThan(html.indexOf("data:image/png;base64,aW1hZ2U="));
+		expect(html.indexOf("data:image/png;base64,aW1hZ2U=")).toBeLessThan(html.indexOf("attachment-tail"));
+	});
+
+	it("lazily collapses displayed custom metadata and honors hidden custom and collab-prompt entries", () => {
+		const entries: SessionEntry[] = [
+			{
+				type: "custom_message",
+				id: "custom-irc",
+				parentId: null,
+				timestamp: "2026-07-15T00:00:00Z",
+				customType: "irc:incoming",
+				content: [{ type: "text", text: "custom-irc-payload" }],
+				display: true,
+			},
+			...["collab-prompt", "hidden-metadata"].map(
+				(customType): SessionEntry => ({
+					type: "custom_message",
+					id: customType,
+					parentId: "custom-irc",
+					timestamp: "2026-07-15T00:00:01Z",
+					customType,
+					content: "hidden-custom-payload",
+					display: false,
+				}),
+			),
+		];
+		const html = renderTranscript({ entries, working: false });
+
+		expect(countElements(html, ".tr-row--custom")).toBe(1);
+		expect(countElements(html, ".tr-row--user")).toBe(0);
+		expect(countElements(html, 'button[aria-expanded="false"]')).toBe(1);
+		expect(html).not.toContain("custom-irc-payload");
+		expect(html).not.toContain("hidden-custom-payload");
+	});
+});
+
 describe("Transcript tail-follow scroll operations", () => {
 	it("restores tail-follow when a connection becomes live", () => {
 		const element = { scrollTop: 0, scrollHeight: 1_000, clientHeight: 200 };

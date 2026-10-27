@@ -14,6 +14,8 @@ bun run mock-host
 
 Host a session from any omp instance (`/collab`, or `/collab ws://localhost:7466` to use the mock relay), then paste the printed link into the connect screen. Deep links work too: `http://localhost:3000/#<roomId>.<key>` auto-connects on load.
 
+IRC traffic, system notices and reminders, task-result envelopes, and displayed custom notices start collapsed in the transcript. Expand a notice to inspect its contents. Ordinary prose, attachments, code examples, unknown tags, and incomplete metadata envelopes remain visible; hidden custom entries stay hidden.
+
 ## Build & deploy
 
 ```sh
