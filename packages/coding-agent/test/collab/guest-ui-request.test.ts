@@ -1277,6 +1277,8 @@ describe("guest HTML form race", () => {
 		}
 	}
 
+	// Permanent: exercise the controller-to-wire boundary so guests receive the context
+	// needed to answer each field, including long details and validation retries.
 	it("walks the guest through each field and returns its answers as form data", async () => {
 		const ctx = makeAskHostContext();
 		const host = new CollabHost(ctx);
@@ -1288,43 +1290,53 @@ describe("guest HTML form race", () => {
 			const welcome = await guest.nextFrame();
 			if (welcome.t !== "welcome") throw new Error(`expected welcome, got ${welcome.t}`);
 
+			const details = "Proposal details\n".repeat(512).trimEnd();
 			const result = controller.showFormDialog(`<form>
 				<input type="hidden" name="plan" value="v2">
+				<p>Review the deployment plan.</p>
+				<pre>${details}</pre>
 				<fieldset><legend>Database</legend>
 					<label><input type="radio" name="db" value="sqlite"> SQLite</label>
 					<label><input type="radio" name="db" value="postgres" checked> Postgres</label>
 				</fieldset>
+				<p>Select the services to provision.</p>
 				<fieldset><legend>Extras</legend>
 					<label><input type="checkbox" name="extras" value="cache" required> Cache</label>
 					<label><input type="checkbox" name="extras" value="queue"> Queue</label>
 				</fieldset>
 				<label>Workers <input type="number" name="workers" value="3" min="1"></label>
+				<p>Each worker consumes one connection.</p>
 			</form>`);
 
 			const db = await nextUiRequest(guest);
 			if (db.request.kind !== "select") throw new Error(`expected select, got ${db.request.kind}`);
 			expect(db.request.options).toEqual(["SQLite", "Postgres", "Other (type your own)"]);
 			expect(db.request.initialIndex).toBe(1);
+			expect(db.request.title).toBe(`Review the deployment plan.\n\n${details}\n\nDatabase`);
 			guest.socket.send({ t: "ui-response", reqId: db.request.reqId, value: "SQLite" });
 
 			// A required group offers Next only once something is checked.
 			const extras = await nextUiRequest(guest);
 			if (extras.request.kind !== "select") throw new Error(`expected select, got ${extras.request.kind}`);
 			expect(extras.request.options).toEqual(["Cache", "Queue", "Other (type your own)"]);
+			expect(extras.request.title).toBe("Select the services to provision.\n\nExtras");
 			guest.socket.send({ t: "ui-response", reqId: extras.request.reqId, value: "Queue" });
 			const extrasNext = await nextUiRequest(guest);
 			if (extrasNext.request.kind !== "select") throw new Error(`expected select, got ${extrasNext.request.kind}`);
 			expect(extrasNext.request.checkedIndices).toEqual([1]);
+			expect(extrasNext.request.title).toBe(extras.request.title);
 			guest.socket.send({ t: "ui-response", reqId: extrasNext.request.reqId, value: "Next →" });
 
 			// A value the form rejects is asked again with the reason.
 			const workers = await nextUiRequest(guest);
 			if (workers.request.kind !== "editor") throw new Error(`expected editor, got ${workers.request.kind}`);
 			expect(workers.request.prefill).toBe("3");
+			expect(workers.request.title).toBe("Each worker consumes one connection.\n\nWorkers");
 			guest.socket.send({ t: "ui-response", reqId: workers.request.reqId, value: "0" });
 			const retry = await nextUiRequest(guest);
 			if (retry.request.kind !== "editor") throw new Error(`expected editor, got ${retry.request.kind}`);
 			expect(retry.request.prefill).toBe("0");
+			expect(retry.request.title.startsWith(workers.request.title)).toBe(true);
 			expect(retry.request.title).not.toBe(workers.request.title);
 			guest.socket.send({ t: "ui-response", reqId: retry.request.reqId, value: "8" });
 
